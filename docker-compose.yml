@@ -1,0 +1,75 @@
+# Porial — installation autonome de démonstration (serveur + PostgreSQL).
+#
+# Démarrage :   docker compose up -d
+# Accès :       http://<adresse de la machine>:8080  (ouvert à tout le réseau local)
+# Connexion :   le compte d'exemple déclaré dans .env (INITIAL_SUPERUSER_*)
+#
+# Le mot de passe de la base (ici) et le compte administrateur (.env) sont des EXEMPLES tirés au hasard. La commande
+# d'installation (`docker run ... ghcr.io/porial/porial install`) en tire de nouveaux à chaque
+# installation : ne réutilisez pas ceux du dépôt.
+#
+# Configuration de démonstration : sécurité réduite au minimum (voir .env). À réserver à des
+# données non sensibles, sur un réseau de confiance.
+#
+# Logiciel propriétaire, licence d'évaluation gratuite (LICENCE.md) : ni redistribution ni
+# usage commercial.
+
+name: porial
+
+# Mot de passe de la base, partagé par les deux services (ancre YAML : une seule valeur à changer).
+# Laissé VIDE ici : la commande d'installation le tire au hasard ; sans elle, la base refuse de
+# démarrer.
+x-postgres-password: &postgres-password ""
+
+services:
+  # Nom propre à Porial (service et conteneur) : ne se confond pas avec un PostgreSQL déjà
+  # présent sur la machine.
+  postgres_porial:
+    image: postgres:18-alpine
+    container_name: postgres_porial
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: porial
+      POSTGRES_USER: porial
+      POSTGRES_PASSWORD: *postgres-password
+      TZ: Europe/Paris
+    # Port dédié, publié sur toutes les interfaces : la base est joignable depuis le réseau local
+    # (outil SQL, sauvegarde). 54320 plutôt que 5432 pour ne pas heurter un PostgreSQL déjà
+    # installé sur la machine. Retirer cette section pour la garder interne aux conteneurs.
+    ports:
+      - "${POSTGRES_PORT:-54320}:5432"
+    # Mémoire partagée des workers parallèles de PostgreSQL : le défaut de Docker (64 Mo) fait
+    # échouer requêtes et constructions d'index parallèles.
+    shm_size: 512mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U porial -d porial"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      # PostgreSQL 18 range ses données sous /var/lib/postgresql/<version>/ : on monte le parent.
+      - postgres_data:/var/lib/postgresql
+
+  porial:
+    image: ${PORIAL_IMAGE:-ghcr.io/porial/porial:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres_porial:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_HOST: postgres_porial
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: porial
+      DATABASE_USER: porial
+      DATABASE_PASSWORD: *postgres-password
+      DATABASE_SSLMODE: disable
+    # Publié sur toutes les interfaces : accès depuis tout le réseau local.
+    ports:
+      - "${PORIAL_PORT:-8080}:8080"
+    volumes:
+      - porial_data:/opt/porial/data
+
+volumes:
+  postgres_data:
+  porial_data:
