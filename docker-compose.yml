@@ -17,9 +17,7 @@
 name: porial
 
 # Mot de passe de la base, partagé par les deux services (ancre YAML : une seule valeur à changer).
-# Laissé VIDE ici : la commande d'installation le tire au hasard ; sans elle, la base refuse de
-# démarrer.
-x-postgres-password: &postgres-password ""
+x-postgres-password: &postgres-password o8WrxLuXfNMPgIZj3jdUZ9pC
 
 services:
   # Nom propre à Porial (service et conteneur) : ne se confond pas avec un PostgreSQL déjà
